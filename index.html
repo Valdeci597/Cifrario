@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cifrário</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon-192.png" />
+  <meta name="theme-color" content="#121212" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #121212;
+      color: #fff;
+      font-family: monospace;
+    }
+
+    .container {
+      padding: 20px;
+      max-width: 900px;
+      margin: auto;
+    }
+
+    textarea {
+      width: 100%;
+      height: 180px;
+      font-size: 16px;
+      font-family: monospace;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 6px;
+      border: none;
+    }
+
+    .botao {
+      padding: 8px 16px;
+      background: #333;
+      color: white;
+      border: none;
+      margin-right: 5px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .botao:hover {
+      background: #444;
+    }
+
+    #cifra {
+      white-space: pre-wrap;
+      line-height: 1.5;
+      font-family: monospace;
+      font-size: 1.1em;
+    }
+
+    #cifra b {
+      color: #4ea8de;
+    }
+
+    .tablatura {
+      display: block;
+      color: #aaa;
+    }
+
+    .flutuante {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #333;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 56px;
+      height: 56px;
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    .controles {
+      display: none;
+      flex-direction: column;
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      gap: 10px;
+    }
+
+    .light {
+      background: #f5f5f5;
+      color: #000;
+    }
+
+    .light #cifra b {
+      color: #004080;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🎶 Cifrário</h2>
+    <textarea id="entrada" placeholder="Cole a cifra aqui..."></textarea>
+    <br />
+    <button class="botao" onclick="salvar()">Salvar</button>
+    <button class="botao" onclick="limpar()">Limpar</button>
+    <div id="cifra"></div>
+  </div>
+
+  <!-- Botão Flutuante -->
+  <button class="flutuante" onclick="toggleControles()">⚙️</button>
+
+  <!-- Controles flutuantes -->
+  <div class="controles" id="controles">
+    <button class="botao" onclick="transpor(1)">+ Tom</button>
+    <button class="botao" onclick="transpor(-1)">− Tom</button>
+    <button class="botao" onclick="toggleTab()">Tab</button>
+    <button class="botao" onclick="toggleTema()">Tema</button>
+    <button class="botao" onclick="rolar()">▶ Rolar</button>
+    <button class="botao" onclick="pararRolagem()">⏹ Parar</button>
+  </div>
+
+  <script>
+    const notas = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const bemol = { "Db": "C#", "Eb": "D#", "Fb": "E", "Gb": "F#", "Ab": "G#", "Bb": "A#", "Cb": "B" };
+    let rolagemId = null;
+
+    function salvar() {
+      const raw = document.getElementById("entrada").value;
+      localStorage.setItem("cifraSalva", raw);
+      renderCifra(raw);
+    }
+
+    function limpar() {
+      localStorage.removeItem("cifraSalva");
+      document.getElementById("entrada").value = "";
+      document.getElementById("cifra").innerHTML = "";
+    }
+
+    function renderCifra(texto) {
+      const formatado = texto
+        .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+        .replace(/(\b[A-G][#b]?m?(?:7|9|11|13)?(?:\([^)]+\))?(?:\/[A-G][#b]?)?\b)/g, "<b>$1</b>")
+        .replace(/\[Tab[^\]]*]/gi, '<span class="tablatura">[Tab]</span>')
+        .replace(/<span class="tablatura">\[Tab\]<\/span>\s*\n([\s\S]*?)(?=\n{2,}|$)/g, '<span class="tablatura">$&</span>')
+        .replace(/\n/g, "<br>");
+      document.getElementById("cifra").innerHTML = formatado;
+    }
+
+    function transpor(semitons) {
+      const acordes = document.querySelectorAll("#cifra b");
+      acordes.forEach(el => {
+        if (el.closest(".tablatura")) return;
+        el.textContent = transporAcorde(el.textContent, semitons);
+      });
+    }
+
+    function transporAcorde(acorde, semitons) {
+      const regex = /^([A-Ga-g][#b]?)(.*?)(?:\/([A-Ga-g][#b]?))?$/;
+      const m = acorde.match(regex);
+      if (!m) return acorde;
+      let [, base, sufixo, baixo] = m;
+      base = bemol[base] || base;
+      baixo = baixo ? (bemol[baixo] || baixo) : null;
+      return transporNota(base.toUpperCase(), semitons) + sufixo + (baixo ? "/" + transporNota(baixo.toUpperCase(), semitons) : "");
+    }
+
+    function transporNota(nota, s) {
+      let i = notas.indexOf(nota);
+      return i >= 0 ? notas[(i + s + 12) % 12] : nota;
+    }
+
+    function toggleControles() {
+      const el = document.getElementById("controles");
+      el.style.display = el.style.display === "flex" ? "none" : "flex";
+    }
+
+    function toggleTab() {
+      const tabs = document.querySelectorAll(".tablatura");
+      tabs.forEach(el => el.style.display = el.style.display === "none" ? "block" : "none");
+    }
+
+    function toggleTema() {
+      document.body.classList.toggle("light");
+    }
+
+    function rolar() {
+      pararRolagem();
+      rolagemId = setInterval(() => window.scrollBy(0, 1), 60);
+    }
+
+    function pararRolagem() {
+      if (rolagemId) clearInterval(rolagemId);
+      rolagemId = null;
+    }
+
+    window.onload = () => {
+      const salva = localStorage.getItem("cifraSalva");
+      if (salva) {
+        document.getElementById("entrada").value = salva;
+        renderCifra(salva);
+      }
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('service-worker.js');
+      }
+    };
+  </script>
+</body>
+</html>
