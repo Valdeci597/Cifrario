@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Cifrário</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#121212">
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #121212;
+      color: #ffffff;
+      font-family: 'Fira Code', monospace;
+      font-size: 1.2em;
+      font-weight: bold; /* Texto em negrito */
+      overflow-y: scroll;
+    }
+
+    .light-mode {
+      background-color: #f5f5f5;
+      color: #000;
+    }
+
+    .tablatura-hidden .tablatura {
+      display: none;
+    }
+
+    .container {
+      width: 100%;
+      padding: 1em;
+      box-sizing: border-box;
+    }
+
+    .controls {
+      display: none;
+      position: fixed;
+      top: 1em;
+      left: 1em;
+      background-color: #00000066;
+      padding: 0.5em;
+      border-radius: 10px;
+      z-index: 999;
+      flex-direction: column;
+      gap: 0.5em;
+    }
+
+    button, input[type="range"] {
+      background-color: #ffffff11;
+      color: inherit;
+      border: none;
+      padding: 0.8em 1.2em;
+      border-radius: 8px;
+      font-size: 1.05em;
+      cursor: pointer;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    textarea, input, select {
+      width: 100%;
+      margin-top: 0.5em;
+      padding: 0.6em 0.8em;
+      border-radius: 5px;
+      border: none;
+      font-family: inherit;
+      font-size: 1em;
+      box-sizing: border-box;
+    }
+
+    #toggleBtn {
+      position: fixed;
+      bottom: 1em;
+      right: 1em;
+      font-size: 1.8em;
+      cursor: pointer;
+      background-color: #00000088;
+      padding: 0.4em 0.7em;
+      border-radius: 50px;
+      z-index: 1000;
+      color: #fff;
+      opacity: 0.7;
+      transition: opacity 0.3s;
+    }
+
+    #toggleBtn:hover {
+      opacity: 1;
+    }
+
+    .slider-container {
+      display: flex;
+      align-items: center;
+      gap: 0.5em;
+      font-size: 0.95em;
+      color: inherit;
+    }
+
+    .formatted-cifra {
+      font-family: 'Fira Code', monospace;
+      white-space: pre-wrap;
+      line-height: 1.6;
+      margin-top: 1.5em;
+      font-size: 1.3em;
+      padding: 0 1em;
+    }
+
+    .formatted-cifra b {
+      font-weight: bold;
+      color: #4ea8de; /* Notas musicais em azul */
+    }
+
+    .transpose-controls {
+      margin: 1em 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5em;
+      align-items: center;
+    }
+
+    .transpose-controls select, .transpose-controls button {
+      padding: 0.4em 0.8em;
+    }
+  </style>
+</head>
+<body>
+  <div id="toggleBtn" onclick="alternarControles()">⚙️</div>
+  <div class="controls">
+    <button onclick="toggleMode()">🌗 Tema</button>
+    <button onclick="adjustFont(1)">A+</button>
+    <button onclick="adjustFont(-1)">A−</button>
+    <button onclick="toggleScroll()">▶️ Rolagem</button>
+    <div class="slider-container">
+      <label for="scrollSpeed">Velocidade:</label>
+      <input type="range" id="scrollSpeed" min="1" max="10" value="3" oninput="atualizarPorcentagem()">
+      <span id="scrollPercent">30%</span>
+    </div>
+    <button onclick="toggleTablatura()">🎸 Ocultar tablatura</button>
+  </div>
+
+  <div class="container">
+    <h1>🎸 Cifrário</h1>
+
+    <label>Endereço da música (URL):</label>
+    <input type="text" id="url" placeholder="Cole a URL aqui">
+    <button onclick="buscarCifra()">🔎 Buscar cifra</button>
+
+    <label>Título da música:</label>
+    <input type="text" id="titulo" placeholder="Título da música">
+
+    <label>Cifra (HTML):</label>
+    <textarea id="conteudo" rows="10" placeholder="Cole aqui a cifra com tags HTML (ex: <b>Am</b>)"></textarea>
+    <button onclick="salvarCifra()">💾 Salvar</button>
+
+    <h2>🎶 Minhas músicas</h2>
+    <select id="lista" onchange="carregarCifra()">
+      <option value="">-- Selecione --</option>
+    </select>
+    <button onclick="removerCifra()">🗑️ Remover música selecionada</button>
+
+    <div class="transpose-controls">
+      <label for="tom">Tom:</label>
+      <select id="tom" onchange="atualizarTomAtual()">
+        <option value="">--</option>
+        <option>C</option><option>C#</option><option>D</option><option>D#</option><option>E</option>
+        <option>F</option><option>F#</option><option>G</option><option>G#</option><option>A</option>
+        <option>A#</option><option>B</option>
+      </select>
+      <span id="tomAtual">Tom atual: --</span>
+      <button onclick="transpor(1)">🔼</button>
+      <button onclick="transpor(-1)">🔽</button>
+    </div>
+
+    <div id="cifraDisplay" class="formatted-cifra"></div>
+  </div>
+
+  <script>
+    const notas = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const bemolParaSustenido = {
+      "Db": "C#", "Eb": "D#", "Fb": "E", "Gb": "F#", "Ab": "G#", "Bb": "A#", "Cb": "B"
+    };
+
+    let scrollInterval;
+    let tablaturaOculta = false;
+
+    function toggleMode() {
+      document.body.classList.toggle('light-mode');
+    }
+
+    function adjustFont(delta) {
+      const currentSize = parseFloat(getComputedStyle(document.body).fontSize);
+      document.body.style.fontSize = (currentSize + delta) + 'px';
+    }
+
+    function buscarCifra() {
+      const url = document.getElementById("url").value.trim();
+      if (!url) return alert("Cole uma URL válida.");
+      const proxy = "https://api.allorigins.win/raw?url=";
+      const endpoint = proxy + encodeURIComponent(url);
+      fetch(endpoint)
+        .then(res => {
+          if (!res.ok) throw "Falha no proxy";
+          return res.text();
+        })
+        .then(html => {
+          const matchPre = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+          const matchDiv = html.match(/<div[^>]+class="cifra"[^>]*>([\s\S]*?)<\/div>/i);
+          const raw = matchPre ? matchPre[1] : matchDiv ? matchDiv[1] : "Cifra não encontrada";
+          document.getElementById("conteudo").value = raw.trim();
+          sugerirTitulo(url);
+          renderCifra(raw.trim());
+        })
+        .catch(err => alert("Erro ao buscar cifra: " + err));
+    }
+
+    function sugerirTitulo(url) {
+      const partes = url.split('/');
+      const ultimo = partes.pop() || partes.pop();
+      const texto = decodeURIComponent(ultimo).replace(/[-_]/g, ' ');
+      document.getElementById("titulo").value = texto.replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    function salvarCifra() {
+      const titulo = document.getElementById("titulo").value.trim();
+      const raw = document.getElementById("conteudo").value;
+      if (!titulo || !raw) return alert("Preencha título e cifra.");
+      localStorage.setItem(titulo, raw);
+      document.getElementById("conteudo").value = "";
+      document.getElementById("url").value = "";
+      document.getElementById("titulo").value = "";
+      atualizarLista();
+      renderCifra(raw);
+    }
+
+    function atualizarLista() {
+      const sel = document.getElementById("lista");
+      sel.innerHTML = '<option value="">-- Selecione --</option>';
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        sel.innerHTML += `<option value="${key}">${key}</option>`;
+      }
+    }
+
+    function carregarCifra() {
+      const titulo = document.getElementById("lista").value;
+      const raw = localStorage.getItem(titulo) || "";
+      document.getElementById("conteudo").value = raw;
+      renderCifra(raw);
+      pararRolagem();
+      window.scrollTo({ top: 0 });
+    }
+
+    function removerCifra() {
+      const sel = document.getElementById("lista");
+      const titulo = sel.value;
+      if (!titulo) return alert("Selecione uma música para remover.");
+      if (confirm(`Remover "${titulo}"?`)) {
+        localStorage.removeItem(titulo);
+        document.getElementById("cifraDisplay").innerHTML = "";
+        atualizarLista();
+      }
+    }
+
+    function renderCifra(raw) {
+      document.getElementById("cifraDisplay").innerHTML = raw;
+    }
+
+    function toggleScroll() {
+      if (scrollInterval) {
+        clearInterval(scrollInterval);
+        scrollInterval = null;
+      } else {
+        const speed = +document.getElementById("scrollSpeed").value;
+        scrollInterval = setInterval(() => window.scrollBy(0, speed), 100);
+      }
+    }
+
+    function pararRolagem() {
+      if (scrollInterval) {
+        clearInterval(scrollInterval);
+        scrollInterval = null;
+      }
+    }
+
+    function alternarControles() {
+      const c = document.querySelector('.controls');
+      c.style.display = c.style.display === 'flex' ? 'none' : 'flex';
+    }
+
+    function atualizarPorcentagem() {
+      const v = document.getElementById("scrollSpeed").value;
+      document.getElementById("scrollPercent").textContent = (v * 10) + '%';
+    }
+
+    function toggleTablatura() {
+      tablaturaOculta = !tablaturaOculta;
+      document.body.classList.toggle('tablatura-hidden', tablaturaOculta);
+    }
+
+    function atualizarTomAtual() {
+      const tom = document.getElementById("tom").value;
+      document.getElementById("tomAtual").textContent = tom ? `Tom atual: ${tom}` : 'Tom atual: --';
+    }
+
+    function transpor(semitons) {
+      const container = document.getElementById("cifraDisplay");
+      if (!container.innerHTML) return;
+
+      const acordes = container.querySelectorAll("b");
+
+      acordes.forEach(el => {
+        if (el.closest(".tablatura")) return;
+        const acordeOriginal = el.textContent.trim();
+        const transposto = transporAcorde(acordeOriginal, semitons);
+        el.textContent = transposto;
+      });
+    }
+
+    function transporAcorde(acorde, semitons) {
+      const regex = /^([A-Ga-g][#b]?)(.*?)(?:\/([A-Ga-g][#b]?))?$/;
+      const match = acorde.match(regex);
+      if (!match) return acorde;
+
+      let [, nota, sufixo, baixo] = match;
+      nota = bemolParaSustenido[nota] || nota;
+      baixo = baixo ? (bemolParaSustenido[baixo] || baixo) : null;
+
+      const novaNota = transporNota(nota.toUpperCase(), semitons);
+      const novoBaixo = baixo ? transporNota(baixo.toUpperCase(), semitons) : "";
+
+      return `${novaNota}${sufixo}${novoBaixo ? "/" + novoBaixo : ""}`;
+    }
+
+    function transporNota(nota, semitons) {
+      const index = notas.indexOf(nota);
+      if (index === -1) return nota;
+      return notas[(index + semitons + 12) % 12];
+    }
+
+    atualizarLista();
+    atualizarPorcentagem();
+    document.body.addEventListener('dblclick', toggleScroll);
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => console.log('Service Worker registrado!', reg))
+        .catch(err => console.error('Erro ao registrar SW:', err));
+    }
+  </script>
+</body>
+</html>
